@@ -29,6 +29,28 @@ chart, designed for large scale (target: Huawei Cloud CCE, but portable to any c
 No cloud-specific template logic — load balancer, storage class, registry, and
 object-store endpoint are all driven by plain values + annotations.
 
+## Infrastructure you provide
+
+The chart deploys Moodle itself; you bring the backing services. Anything that
+implements the standard interface works — managed or self-hosted.
+
+| Requirement | Interface | Examples |
+|---|---|---|
+| **Object storage** | S3-compatible API | AWS S3, MinIO, Ceph RGW, Huawei OBS, any S3 gateway |
+| **Shared filesystem** | `ReadWriteMany` PVC | NFS, CephFS, AWS EFS, GCP Filestore, Huawei SFS / SFS Turbo |
+| **Database** | PostgreSQL (≥13) | RDS / Cloud SQL / Huawei RDS, or in-cluster Postgres |
+| **Cache & sessions** | Redis (≥6) | ElastiCache / MemoryStore / Huawei DCS, or in-cluster Redis |
+| **Container registry** | OCI registry | Docker Hub, GHCR, Harbor, ECR, Huawei SWR |
+| **Load balancer** | Service `LoadBalancer` or Ingress | any cloud LB / ingress controller, via annotations |
+
+Notes:
+- **Object storage is optional** (`objectfs.enabled=false` keeps all files on the shared
+  filesystem) but recommended at scale — it offloads bulk files off the RWX volume.
+- The **shared `ReadWriteMany` filesystem is required** even with object storage: Moodle
+  mandates a shared `dataroot` for caches, sessions fallback, locks, and temp.
+- Optionally put a **transaction-mode connection pooler** (e.g. PgBouncer) in front of
+  PostgreSQL for large fan-out; the chart supports it via values.
+
 ## Quickstart
 
 ```bash

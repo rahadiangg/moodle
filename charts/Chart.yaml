@@ -20,7 +20,8 @@ keywords:
   - lms
   - objectfs
   - s3
-  - huawei-cce
-maintainers:
-  - name: pesonaedukasi
-# No subcharts: PostgreSQL (RDS), Redis (DCS) and PgBouncer are external.
+# Add yourself as a maintainer when you contribute:
+# maintainers:
+#   - name: your-name
+#     url: https://github.com/your-name
+# No subcharts: PostgreSQL, Redis and any connection pooler are external.
