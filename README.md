@@ -79,3 +79,12 @@ the connection-storm guardrail, and a local MinIO-based end-to-end test.
 - **Huawei SWR** rejects buildx attestation manifests — keep `--provenance=false --sbom=false`.
 - On **CCE Turbo (Yangtse/Cilium)**, allow the container CIDR (e.g. `172.16.0.0/12`) in your
   RDS/DCS security groups — pods are not SNAT'd to the node.
+
+## Contributing
+
+Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). Please keep the chart
+cloud-agnostic and never commit secrets or real infrastructure details.
+
+## License
+
+[Apache License 2.0](LICENSE).
