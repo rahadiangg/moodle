@@ -9,7 +9,7 @@ docs, examples for other clouds).
   placeholders and `existingSecret`. The repo ships only generic examples.
 - Keep the chart **cloud-agnostic**: no provider-specific template logic. Provider
   integration (load balancer, storage class, registry, endpoint) goes through plain
-  values + annotations. Cloud examples live in overlay files like `values-huawei.yaml`.
+  values + annotations. Cloud examples live in `examples/` (e.g. `examples/values-huawei.yaml`).
 - Match the existing style and keep changes focused.
 
 ## Develop & test
@@ -32,8 +32,8 @@ Before opening a PR:
 - Docs/values comments updated for any new/renamed value.
 
 ## Adding a cloud example
-Add a `values-<cloud>.yaml` overlay using only generic values + that cloud's
-annotations (mirror `values-huawei.yaml`). Don't add cloud-specific Go templating.
+Add `examples/values-<cloud>.yaml` using only generic values + that cloud's annotations
+(mirror `examples/values-huawei.yaml`). Don't add cloud-specific Go templating.
 
 ## License
 By contributing, you agree your contributions are licensed under the

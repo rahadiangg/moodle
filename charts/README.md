@@ -32,16 +32,15 @@ kubectl -n moodle create secret generic moodle-secrets \
   --from-literal=admin-password=... \
   --from-literal=s3-access-key=... --from-literal=s3-secret-key=...
 
-# 2) Install (copy values-huawei.yaml or values.yaml and edit your hosts/bucket)
-helm upgrade --install moodle . -n moodle --create-namespace \
-  --set auth.existingSecret=moodle-secrets -f values-huawei.yaml
+# 2) Install — copy an example from ../examples/ (or values.yaml) and edit hosts/bucket.
+#    Run from the repo root so the paths resolve:
+helm upgrade --install moodle charts -n moodle --create-namespace \
+  --set auth.existingSecret=moodle-secrets -f examples/values-aws.yaml
 
 # 3) Watch it come up, then smoke-test
 kubectl -n moodle rollout status deploy/moodle-web
 helm test moodle -n moodle
 ```
-
-(Run these from this `charts/` directory, or replace `.` with `charts` from the repo root.)
 
 ## What happens during install
 
@@ -63,7 +62,8 @@ Pick whichever your platform uses — both are just values:
 - **Ingress** — set `ingress.enabled: true` with `ingress.className`, `ingress.hosts`,
   `ingress.tls`, and any controller/cloud annotations in `ingress.annotations`.
 
-`values-huawei.yaml` shows a CCE example (`ingress.className: cce` + `kubernetes.io/elb.*`).
+See [`../examples/`](../examples/) for full overlays — e.g. Huawei CCE uses
+`ingress.className: cce` with `kubernetes.io/elb.*` annotations.
 
 ## Key settings
 

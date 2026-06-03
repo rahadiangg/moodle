@@ -72,11 +72,11 @@ kubectl -n moodle create secret generic moodle-secrets \
 **3. Install the chart** (edit a values file first with your hosts/bucket):
 ```bash
 helm upgrade --install moodle charts -n moodle --create-namespace \
-  --set auth.existingSecret=moodle-secrets -f charts/values-huawei.yaml
+  --set auth.existingSecret=moodle-secrets -f examples/values-aws.yaml
 ```
 
 > `charts/values.yaml` is the cloud-agnostic default with every option documented inline.
-> `charts/values-huawei.yaml` is a ready example for Huawei CCE — copy it for your own cloud.
+> [`examples/`](examples/) has ready overlays (AWS, Huawei CCE) — copy the closest one for your cloud.
 
 Full configuration reference and a local test (with MinIO standing in for object storage)
 are in **[charts/README.md](charts/README.md)**.

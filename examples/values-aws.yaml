@@ -1,0 +1,76 @@
+# =============================================================================
+# AWS (EKS) example overlay.
+# Uses only the chart's generic values + AWS annotations — no AWS-specific
+# template logic. Fill in every REPLACE_* and create the credential Secret first.
+#   helm upgrade --install moodle charts -n moodle -f examples/values-aws.yaml
+# No secrets here — credentials come from auth.existingSecret.
+# =============================================================================
+
+image:
+  # ECR repository of your built image.
+  repository: "REPLACE_ACCOUNT.dkr.ecr.REPLACE_REGION.amazonaws.com/moodle-objectfs"
+  tag: "4.5.11-2"
+
+site:
+  url: "https://moodle.example.com"
+  name: "Moodle"
+
+auth:
+  existingSecret: "moodle-secrets"   # db-password, redis-password, admin-password, s3-access-key, s3-secret-key
+
+# RDS for PostgreSQL
+externalDatabase:
+  host: "REPLACE_RDS_ENDPOINT"
+  port: 5432
+  name: "moodle"
+  user: "moodle"
+install_db:
+  host: "REPLACE_RDS_ENDPOINT"
+  port: 5432
+
+# ElastiCache for Redis
+externalRedis:
+  host: "REPLACE_ELASTICACHE_PRIMARY_ENDPOINT"
+
+# Amazon S3 (no custom endpoint for real AWS)
+objectfs:
+  enabled: true
+  bucket: "REPLACE_S3_BUCKET"
+  region: "us-east-1"
+  endpoint: ""                       # blank = AWS S3
+  sizeThreshold: 1048576
+  presignedUrls:
+    enabled: true
+    minFileSize: 1048576
+
+# Amazon EFS (ReadWriteMany) via the EFS CSI driver
+persistence:
+  storageClass: "efs-sc"             # your EFS StorageClass name
+  accessMode: ReadWriteMany
+  size: 100Gi
+
+# AWS Load Balancer Controller (ALB ingress). TLS terminates at the ALB via ACM.
+ingress:
+  enabled: true
+  className: "alb"
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/certificate-arn: "REPLACE_ACM_CERT_ARN"
+    alb.ingress.kubernetes.io/healthcheck-path: /fpm-ping
+  hosts:
+    - host: "moodle.example.com"
+      paths:
+        - path: /
+          pathType: Prefix
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 20
+  targetCPUUtilizationPercentage: 60
+
+pdb:
+  enabled: true
+  minAvailable: "75%"
