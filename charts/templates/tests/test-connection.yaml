@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "moodle.fullname" . }}-test-connection
+  labels:
+    {{- include "moodle.labels" . | nindent 4 }}
+    app.kubernetes.io/component: test
+  annotations:
+    helm.sh/hook: test
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  restartPolicy: Never
+  {{- include "moodle.imagePullSecrets" . | nindent 2 }}
+  containers:
+    - name: test
+      image: {{ include "moodle.image" . }}
+      imagePullPolicy: {{ .Values.image.pullPolicy }}
+      command:
+        - sh
+        - -c
+        - |
+          set -e
+          URL="http://{{ include "moodle.fullname" . }}:{{ .Values.service.port }}/login/index.php"
+          echo "GET $URL"
+          code=$(curl -s -o /dev/null -w '%{http_code}' "$URL")
+          echo "HTTP $code"
+          # Moodle login page returns 200 (or 303 redirect to itself); both are healthy.
+          case "$code" in 200|303) exit 0 ;; *) exit 1 ;; esac

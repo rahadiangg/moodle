@@ -1,0 +1,75 @@
+{{- /*
+Non-secret env shared by web, cron, and both hook Jobs (mounted via envFrom).
+Role-specific flags (AUTO_UPDATE_MOODLE, RUN_CRON_TASKS) and per-role overrides
+(e.g. the migrate Job's direct DB_HOST) are set as explicit `env:` which takes
+precedence over envFrom.
+*/ -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "moodle.fullname" . }}-env
+  labels:
+    {{- include "moodle.labels" . | nindent 4 }}
+  annotations:
+    # Also created in the pre-* hook phase (weight -5) so the migrate/configure
+    # Jobs can reference it; persists for the web/cron pods afterwards.
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-5"
+    helm.sh/hook-delete-policy: before-hook-creation
+data:
+  # Site / proxy
+  SITE_URL: {{ .Values.site.url | quote }}
+  MOODLE_SITENAME: {{ .Values.site.name | quote }}
+  MOODLE_USERNAME: {{ .Values.auth.adminUser | quote }}
+  MOODLE_EMAIL: {{ .Values.auth.adminEmail | quote }}
+  REVERSEPROXY: {{ .Values.site.reverseProxy | quote }}
+  SSLPROXY: {{ .Values.site.sslProxy | quote }}
+
+  # Database (web/cron point at the pooler; migrate Job overrides DB_HOST)
+  DB_TYPE: "pgsql"
+  DB_HOST: {{ .Values.externalDatabase.host | quote }}
+  DB_PORT: {{ .Values.externalDatabase.port | quote }}
+  DB_NAME: {{ .Values.externalDatabase.name | quote }}
+  DB_USER: {{ .Values.externalDatabase.user | quote }}
+  DB_PREFIX: {{ .Values.externalDatabase.prefix | quote }}
+  DB_FETCHBUFFERSIZE: {{ .Values.externalDatabase.fetchBufferSize | quote }}
+  DB_DBHANDLEOPTIONS: {{ .Values.externalDatabase.dbHandleOptions | quote }}
+  {{- if .Values.externalDatabase.readReplica.enabled }}
+  DB_HOST_REPLICA: {{ .Values.externalDatabase.readReplica.host | quote }}
+  DB_PORT_REPLICA: {{ .Values.externalDatabase.readReplica.port | quote }}
+  DB_USER_REPLICA: {{ .Values.externalDatabase.readReplica.user | default .Values.externalDatabase.user | quote }}
+  {{- end }}
+
+  # Redis (sessions + MUC cache auto-configured by the image when set)
+  REDIS_HOST: {{ .Values.externalRedis.host | quote }}
+  {{- if .Values.externalRedis.user }}
+  REDIS_USER: {{ .Values.externalRedis.user | quote }}
+  {{- end }}
+
+  # PHP-FPM tuning (custom image; envsubst into www.conf)
+  PHP_FPM_PM: {{ .Values.php.pm | quote }}
+  PHP_FPM_MAX_CHILDREN: {{ .Values.php.maxChildren | quote }}
+  PHP_FPM_MAX_REQUESTS: {{ .Values.php.maxRequests | quote }}
+  memory_limit: {{ printf "%dM" (int .Values.php.memoryLimitMB) | quote }}
+  client_max_body_size: {{ .Values.php.uploadMaxSize | quote }}
+  post_max_size: {{ .Values.php.uploadMaxSize | quote }}
+  upload_max_filesize: {{ .Values.php.uploadMaxSize | quote }}
+
+  # ObjectFS / S3-compatible storage — non-secret facts. Scripts read these at runtime.
+  OBJECTFS_ENABLED: {{ .Values.objectfs.enabled | quote }}
+  {{- if .Values.objectfs.enabled }}
+  S3_BUCKET: {{ .Values.objectfs.bucket | quote }}
+  S3_REGION: {{ .Values.objectfs.region | quote }}
+  S3_ENDPOINT: {{ .Values.objectfs.endpoint | quote }}
+  OBJECTFS_ENABLETASKS: {{ .Values.objectfs.enableTasks | quote }}
+  OBJECTFS_SIZETHRESHOLD: {{ .Values.objectfs.sizeThreshold | quote }}
+  OBJECTFS_DELETELOCAL: {{ .Values.objectfs.deleteLocal | quote }}
+  OBJECTFS_SIGNINGMETHOD: {{ .Values.objectfs.signingMethod | quote }}
+  OBJECTFS_PRESIGNED_ENABLED: {{ ternary "1" "0" .Values.objectfs.presignedUrls.enabled | quote }}
+  OBJECTFS_PRESIGNED_MINSIZE: {{ .Values.objectfs.presignedUrls.minFileSize | quote }}
+  OBJECTFS_PRESIGNED_EXPIRY: {{ .Values.objectfs.presignedUrls.expiry | quote }}
+  OBJECTFS_PRESIGNED_WHITELIST: {{ .Values.objectfs.presignedUrls.whitelist | quote }}
+  {{- end }}
+
+  # Runs after config.php generation on every pod (idempotent config.php edits)
+  POST_CONFIGURE_COMMANDS: "sh /scripts/post-configure.sh"

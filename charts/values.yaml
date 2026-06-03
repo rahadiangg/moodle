@@ -1,0 +1,237 @@
+# =============================================================================
+# Moodle — default values (cloud-agnostic, dev-friendly).
+# Cloud-specific bits (storage class, object-storage endpoint, image registry,
+# load-balancer annotations) are left generic here; see values-huawei.yaml for a
+# worked Huawei Cloud CCE example. Secrets should ALWAYS come from existingSecret
+# in production; the inline `auth.*` fields exist only for local/dev.
+# =============================================================================
+
+nameOverride: ""
+fullnameOverride: ""
+
+image:
+  # The custom Moodle+ObjectFS image you built and pushed to your registry.
+  # Build: docker buildx build --platform linux/amd64 -t <repo>:<tag> --push image/
+  repository: REPLACE_REGISTRY/moodle-objectfs
+  tag: "4.5.11-2"           # immutable tag; never 'latest'
+  pullPolicy: IfNotPresent
+  pullSecrets: []           # e.g. [registry-cred] — dockerconfigjson Secret name(s)
+
+# Public site identity / proxy behavior (behind a TLS-terminating load balancer).
+site:
+  url: "https://moodle.example.com"   # MUST equal the public URL exactly -> $CFG->wwwroot
+  name: "Moodle"
+  reverseProxy: true        # -> REVERSEPROXY
+  sslProxy: true            # -> SSLPROXY (trust X-Forwarded-Proto from the proxy/LB)
+
+# -----------------------------------------------------------------------------
+# PHP-FPM / app tuning — THE per-pod scaling lever (see connection-storm guardrail).
+# Requires the custom image (env-templatized www.conf).
+# -----------------------------------------------------------------------------
+php:
+  pm: ondemand              # ondemand | static. static = predictable RAM at exam scale.
+  maxChildren: 100          # max FPM workers per pod = max DB connections per pod
+  maxRequests: 2000         # recycle workers to bound leaks
+  memoryLimitMB: 256        # -> PHP memory_limit
+  uploadMaxSize: "200m"     # nginx client_max_body_size + PHP post/upload max
+
+# -----------------------------------------------------------------------------
+# Web tier (stateless, HPA-scaled)
+# -----------------------------------------------------------------------------
+web:
+  replicaCount: 2           # floor when autoscaling disabled; HPA owns it otherwise
+  terminationGracePeriodSeconds: 90   # > slowest in-flight request (quiz submit/upload)
+  preStopDrainSeconds: 15   # let the LB deregister the endpoint before SIGTERM
+  resources:
+    requests: { cpu: "500m", memory: "1Gi" }
+    limits:   { memory: "2Gi" }       # memory limit only; NO cpu limit (avoid throttling)
+  podAntiAffinity: soft     # soft | hard | "" — spread pods across nodes by hostname
+  nodeSelector: {}
+  tolerations: []
+  extraEnv: []              # [{name, value}] escape hatch
+
+# -----------------------------------------------------------------------------
+# Cron tier — EXACTLY ONE replica (multiple corrupt scheduled-task state)
+# -----------------------------------------------------------------------------
+cron:
+  enabled: true
+  resources:
+    requests: { cpu: "250m", memory: "512Mi" }
+    limits:   { memory: "2Gi" }
+  nodeSelector: {}
+  tolerations: []
+
+# -----------------------------------------------------------------------------
+# Install/upgrade — Helm pre-install/pre-upgrade hook Jobs.
+#   db-migrate (weight 0): install_database/upgrade.php, DIRECT to the DB.
+#   configure  (weight 5): moosh ObjectFS settings (idempotent).
+# -----------------------------------------------------------------------------
+install:
+  enabled: true
+  backoffLimit: 2
+  activeDeadlineSeconds: 3600         # big-table upgrades are slow
+  resources:
+    requests: { cpu: "500m", memory: "1Gi" }
+    limits:   { memory: "3Gi" }
+
+# -----------------------------------------------------------------------------
+# External database — PostgreSQL (managed service or in-cluster).
+# Web/cron reach it (optionally through a transaction-mode pooler like PgBouncer).
+# The migrate Job bypasses the pooler (install_db.host) — schema migration breaks
+# under transaction pooling.
+# -----------------------------------------------------------------------------
+externalDatabase:
+  host: "postgres"                    # DB host or PgBouncer service
+  port: 5432
+  name: "moodle"
+  user: "moodle"
+  prefix: "mdl_"
+  existingSecret: ""                  # keys: db-password (+ db-password-replica)
+  # Transaction-mode pooler flags (set both true only when `host` is a txn pooler):
+  fetchBufferSize: 0                  # -> DB_FETCHBUFFERSIZE (0 for PgBouncer txn mode)
+  dbHandleOptions: false              # -> DB_DBHANDLEOPTIONS (true for PgBouncer txn mode)
+  # Read replica (reads routed here via $CFG->dboptions['readonly']).
+  readReplica:
+    enabled: false
+    host: ""
+    port: 5432
+    user: ""                          # falls back to user if empty
+
+# Direct-to-DB coordinates for the migrate Job (NOT the pooler).
+install_db:
+  host: "postgres"
+  port: 5432
+
+# -----------------------------------------------------------------------------
+# External Redis — single instance (managed service or in-cluster).
+# Setting `host` makes the image configure BOTH automatically on every pod start:
+#   * session handler  -> $CFG->session_handler_class = \core\session\redis
+#   * MUC application cache store (cache_config_writer::add_store_instance)
+# So there is no separate MUC job step — the image handles it (idempotently).
+# Note: set the Redis maxmemory-policy = noeviction so sessions are never evicted.
+# -----------------------------------------------------------------------------
+externalRedis:
+  host: "redis"
+  port: 6379                          # informational; image uses default 6379
+  existingSecret: ""                  # key: redis-password
+  user: ""                            # Redis 6+ ACL user (optional)
+
+# -----------------------------------------------------------------------------
+# ObjectFS -> S3-compatible object storage (AWS S3, MinIO, Huawei OBS, etc).
+# Bulk filedir offload. `endpoint` = the S3 endpoint (omit/blank for AWS S3).
+# -----------------------------------------------------------------------------
+objectfs:
+  enabled: true
+  bucket: "moodle-filedir"
+  region: "us-east-1"
+  endpoint: ""                        # S3 endpoint, e.g. https://s3.example.com (blank = AWS)
+  sizeThreshold: 1048576              # bytes; push files larger than this to storage
+  deleteLocal: 1                      # reclaim shared-storage space after a successful push
+  enableTasks: 1                      # background push/pull/delete scheduled tasks
+  signingMethod: "s3"                 # presigned URL method: s3 | cf (CloudFront)
+  existingSecret: ""                  # keys: s3-access-key, s3-secret-key
+  # Presigned URLs: clients fetch files directly from storage (302 redirect) instead
+  # of streaming through the web pods. Big win for large-file bandwidth at scale.
+  presignedUrls:
+    enabled: false
+    minFileSize: 0                    # bytes; only redirect files >= this size (0 = all)
+    expiry: 7200                      # seconds the signed URL stays valid
+    whitelist: "*"                    # file types eligible for redirect ('*' = all)
+
+# -----------------------------------------------------------------------------
+# Shared moodledata (ReadWriteMany) — REQUIRED even with ObjectFS.
+# Needs an RWX-capable StorageClass (NFS/CephFS/EFS/Filestore/SFS Turbo/...).
+# tempdir + localcache are node-local emptyDir to keep the shared volume quiet.
+# -----------------------------------------------------------------------------
+persistence:
+  existingClaim: ""                   # use a pre-provisioned RWX PVC if set
+  storageClass: ""                    # "" = cluster default StorageClass
+  accessMode: ReadWriteMany
+  size: 100Gi
+localcache:
+  sizeLimit: 5Gi                      # emptyDir -> /var/www/localcache
+tempdir:
+  sizeLimit: 10Gi                     # emptyDir -> /var/www/moodletemp
+
+# -----------------------------------------------------------------------------
+# Service — set type=LoadBalancer + annotations to have your cloud provision an
+# external LB (the common cross-cloud way), or keep ClusterIP behind an Ingress.
+# -----------------------------------------------------------------------------
+service:
+  type: ClusterIP                     # ClusterIP | LoadBalancer | NodePort
+  port: 80                            # -> targetPort 8080 (container)
+  annotations: {}                     # cloud LB annotations go here
+  loadBalancerClass: ""               # optional, for type=LoadBalancer
+  loadBalancerSourceRanges: []        # optional CIDR allowlist for type=LoadBalancer
+  externalTrafficPolicy: ""           # Local | Cluster (LoadBalancer/NodePort)
+  nodePorts:
+    http: ""                          # fixed nodePort when type=NodePort
+
+# -----------------------------------------------------------------------------
+# Ingress — standard, cloud-agnostic. Put any controller/cloud LB annotations
+# (TLS, body-size, health-check, LB class/id) in `annotations`.
+# -----------------------------------------------------------------------------
+ingress:
+  enabled: false
+  className: ""                       # e.g. nginx, alb, traefik, cce
+  annotations: {}
+  hosts:
+    - host: moodle.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []                             # [{secretName: moodle-tls, hosts: [moodle.example.com]}]
+
+# -----------------------------------------------------------------------------
+# Autoscaling (CPU + behavior windows tuned for bursty exam load)
+# -----------------------------------------------------------------------------
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 20
+  targetCPUUtilizationPercentage: 60
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      percent: 100
+      periodSeconds: 30
+    scaleDown:
+      stabilizationWindowSeconds: 600
+      percent: 10
+      periodSeconds: 60
+
+pdb:
+  enabled: true
+  minAvailable: "75%"
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+# Credentials. In production set auth.existingSecret (a catch-all Secret) and/or
+# per-group existingSecret; then the inline values below are ignored and the
+# chart creates NO Secret. The inline auth.* fields are for local/dev only.
+# Catch-all Secret keys: db-password, db-password-replica, redis-password,
+# admin-password, s3-access-key, s3-secret-key.
+auth:
+  existingSecret: ""
+  dbPassword: ""
+  dbPasswordReplica: ""
+  redisPassword: ""
+  adminUser: "admin"
+  adminPassword: ""
+  adminEmail: "admin@example.com"
+  s3AccessKey: ""
+  s3SecretKey: ""
+
+# -----------------------------------------------------------------------------
+# Phase-2 toggles (stubbed; default off)
+# -----------------------------------------------------------------------------
+metrics:
+  fpmExporter:
+    enabled: false
+networkPolicy:
+  enabled: false
+topologySpread:
+  enabled: false

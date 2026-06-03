@@ -1,0 +1,32 @@
+Moodle {{ .Chart.AppVersion }} ({{ include "moodle.fullname" . }}) installed.
+
+Site URL : {{ .Values.site.url }}
+Image    : {{ include "moodle.image" . }}
+
+Install/upgrade order (Helm hooks): supporting ConfigMaps/Secret (weight -5) ->
+db-migrate Job (weight 0, DIRECT to DB {{ .Values.install_db.host }}) ->
+configure Job (weight 5, ObjectFS settings). Web/cron pods block in the
+wait-for-schema init container until the schema exists.
+
+Check rollout:
+  kubectl -n {{ .Release.Namespace }} rollout status deploy/{{ include "moodle.fullname" . }}-web
+  kubectl -n {{ .Release.Namespace }} get pods -l app.kubernetes.io/instance={{ .Release.Name }}
+
+Run the smoke test:
+  helm test {{ .Release.Name }} -n {{ .Release.Namespace }}
+
+{{ if .Values.autoscaling.enabled -}}
+Autoscaling: {{ .Values.autoscaling.minReplicas }}..{{ .Values.autoscaling.maxReplicas }} pods @ {{ .Values.autoscaling.targetCPUUtilizationPercentage }}% CPU.
+{{- else -}}
+Fixed replicas: {{ .Values.web.replicaCount }} (autoscaling disabled).
+{{- end }}
+
+CONNECTION-STORM GUARDRAIL
+  Peak client connections into the DB/pooler = maxReplicas x php.maxChildren
+    = {{ if .Values.autoscaling.enabled }}{{ .Values.autoscaling.maxReplicas }}{{ else }}{{ .Values.web.replicaCount }}{{ end }} x {{ .Values.php.maxChildren }} = {{ mul (ternary .Values.autoscaling.maxReplicas (.Values.web.replicaCount | int) .Values.autoscaling.enabled | int) (.Values.php.maxChildren | int) }}
+  If using a transaction-mode pooler, ensure:
+    (pooler default_pool_size x pooler_instances) < DB max_connections - ~50 reserve
+  Reads route to the replica ({{ if .Values.externalDatabase.readReplica.enabled }}{{ .Values.externalDatabase.readReplica.host }}{{ else }}DISABLED — set externalDatabase.readReplica.enabled{{ end }}).
+{{ if not .Values.objectfs.enabled }}
+WARNING: objectfs.enabled=false — Moodle filedir stays on the shared RWX volume (no object-storage offload).
+{{- end }}

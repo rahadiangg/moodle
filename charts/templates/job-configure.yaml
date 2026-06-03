@@ -1,0 +1,69 @@
+{{- if and .Values.install.enabled .Values.objectfs.enabled -}}
+{{- /*
+Write ObjectFS S3/OBS settings to the DB. pre-install + pre-upgrade hook, weight 5
+(runs AFTER db-migrate at weight 0, so the schema + plugin tables exist).
+POST_CONFIGURE_COMMANDS is blanked so config.php does NOT set
+alternative_file_system_class before the S3 settings land — otherwise moosh's
+Moodle bootstrap would try to init the S3 filesystem with empty credentials.
+Idempotent: moosh config-set is an upsert.
+*/ -}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "moodle.fullname" . }}-configure
+  labels:
+    {{- include "moodle.labels" . | nindent 4 }}
+    app.kubernetes.io/component: configure
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "5"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: {{ .Values.install.backoffLimit }}
+  activeDeadlineSeconds: {{ .Values.install.activeDeadlineSeconds }}
+  template:
+    metadata:
+      labels:
+        {{- include "moodle.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: configure
+    spec:
+      restartPolicy: Never
+      {{- include "moodle.imagePullSecrets" . | nindent 6 }}
+      serviceAccountName: {{ include "moodle.serviceAccountName" . }}
+      securityContext:
+        {{- include "moodle.podSecurityContext" . | nindent 8 }}
+      containers:
+        - name: configure
+          image: {{ include "moodle.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- include "moodle.containerSecurityContext" . | nindent 12 }}
+          args: ["sh", "/scripts/objectfs-configure.sh"]
+          envFrom:
+            - configMapRef:
+                name: {{ include "moodle.fullname" . }}-env
+          env:
+            - name: AUTO_UPDATE_MOODLE
+              value: "false"            # schema already done by db-migrate
+            - name: RUN_CRON_TASKS
+              value: "false"
+            - name: POST_CONFIGURE_COMMANDS
+              value: ""                 # set S3 settings BEFORE alternative_file_system_class
+            - name: DB_HOST            # DIRECT to RDS (moosh CLI, avoid pooler quirks)
+              value: {{ .Values.install_db.host | quote }}
+            - name: DB_PORT
+              value: {{ .Values.install_db.port | quote }}
+            - name: DB_DBHANDLEOPTIONS
+              value: "false"
+            {{- include "moodle.secretEnv" . | nindent 12 }}
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+          resources:
+            {{- toYaml .Values.install.resources | nindent 12 }}
+      volumes:
+        - name: scripts
+          configMap:
+            name: {{ include "moodle.fullname" . }}-scripts
+            defaultMode: 0755
+{{- end }}

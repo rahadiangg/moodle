@@ -1,0 +1,20 @@
+# Helm
+*.tgz
+charts/charts/
+charts/Chart.lock
+
+# Local / secret overrides — never commit real endpoints or credentials
+values-local.yaml
+*.local.yaml
+*.secret.yaml
+secrets.yaml
+*.kubeconfig
+kubeconfig*
+
+# Editor / OS
+.DS_Store
+*.swp
+*.swo
+.idea/
+.vscode/
+*~

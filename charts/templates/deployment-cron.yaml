@@ -1,0 +1,66 @@
+{{- if .Values.cron.enabled -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "moodle.fullname" . }}-cron
+  labels:
+    {{- include "moodle.labels" . | nindent 4 }}
+    app.kubernetes.io/component: cron
+spec:
+  replicas: 1                          # EXACTLY ONE — multiple corrupt task state
+  strategy:
+    type: Recreate                     # never two crons at once
+  selector:
+    matchLabels:
+      {{- include "moodle.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: cron
+  template:
+    metadata:
+      labels:
+        {{- include "moodle.labels" . | nindent 8 }}
+        app.kubernetes.io/component: cron
+      annotations:
+        checksum/env: {{ include (print $.Template.BasePath "/configmap-env.yaml") . | sha256sum }}
+        checksum/scripts: {{ include (print $.Template.BasePath "/configmap-scripts.yaml") . | sha256sum }}
+    spec:
+      {{- include "moodle.imagePullSecrets" . | nindent 6 }}
+      serviceAccountName: {{ include "moodle.serviceAccountName" . }}
+      securityContext:
+        {{- include "moodle.podSecurityContext" . | nindent 8 }}
+      initContainers:
+        {{- include "moodle.waitForSchemaInit" . | nindent 8 }}
+      containers:
+        - name: moodle
+          image: {{ include "moodle.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- include "moodle.containerSecurityContext" . | nindent 12 }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "moodle.fullname" . }}-env
+          env:
+            - name: AUTO_UPDATE_MOODLE
+              value: "false"
+            - name: RUN_CRON_TASKS
+              value: "true"             # the cron loop lives here only
+            {{- include "moodle.secretEnv" . | nindent 12 }}
+          volumeMounts:
+            {{- include "moodle.volumeMounts" . | nindent 12 }}
+          livenessProbe:
+            {{- include "moodle.fpmPingExec" . | nindent 12 }}
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 4
+          resources:
+            {{- toYaml .Values.cron.resources | nindent 12 }}
+      volumes:
+        {{- include "moodle.volumes" . | nindent 8 }}
+      {{- with .Values.cron.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.cron.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

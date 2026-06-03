@@ -1,0 +1,14 @@
+# Patterns to ignore when building Helm packages.
+.DS_Store
+.git/
+.gitignore
+*.tmproj
+.vscode/
+.idea/
+*.swp
+*.bak
+*.orig
+# Local/secret value overrides should never ship inside the package
+values-local.yaml
+*.local.yaml
+*.secret.yaml

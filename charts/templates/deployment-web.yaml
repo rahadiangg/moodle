@@ -1,0 +1,123 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "moodle.fullname" . }}-web
+  labels:
+    {{- include "moodle.labels" . | nindent 4 }}
+    app.kubernetes.io/component: web
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.web.replicaCount }}
+  {{- end }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 25%
+  selector:
+    matchLabels:
+      {{- include "moodle.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: web
+  template:
+    metadata:
+      labels:
+        {{- include "moodle.labels" . | nindent 8 }}
+        app.kubernetes.io/component: web
+      annotations:
+        # Roll pods when env/scripts change.
+        checksum/env: {{ include (print $.Template.BasePath "/configmap-env.yaml") . | sha256sum }}
+        checksum/scripts: {{ include (print $.Template.BasePath "/configmap-scripts.yaml") . | sha256sum }}
+    spec:
+      {{- include "moodle.imagePullSecrets" . | nindent 6 }}
+      serviceAccountName: {{ include "moodle.serviceAccountName" . }}
+      securityContext:
+        {{- include "moodle.podSecurityContext" . | nindent 8 }}
+      terminationGracePeriodSeconds: {{ .Values.web.terminationGracePeriodSeconds }}
+      initContainers:
+        {{- include "moodle.waitForSchemaInit" . | nindent 8 }}
+      containers:
+        - name: moodle
+          image: {{ include "moodle.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- include "moodle.containerSecurityContext" . | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: {{ include "moodle.fullname" . }}-env
+          env:
+            - name: AUTO_UPDATE_MOODLE
+              value: "false"            # web pods never run schema upgrades
+            - name: RUN_CRON_TASKS
+              value: "false"            # cron runs in its own pod
+            {{- include "moodle.secretEnv" . | nindent 12 }}
+            {{- with .Values.web.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          volumeMounts:
+            {{- include "moodle.volumeMounts" . | nindent 12 }}
+          startupProbe:
+            {{- include "moodle.fpmPingExec" . | nindent 12 }}
+            periodSeconds: 5
+            failureThreshold: 30        # ~150s for first boot (config gen + opcache)
+          livenessProbe:
+            {{- include "moodle.fpmPingExec" . | nindent 12 }}
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6         # generous: don't kill a slow pod under load
+          readinessProbe:
+            httpGet:
+              path: /login/index.php    # full Moodle bootstrap + DB
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sh", "-c", "sleep {{ .Values.web.preStopDrainSeconds }}"]
+          resources:
+            {{- toYaml .Values.web.resources | nindent 12 }}
+      volumes:
+        {{- include "moodle.volumes" . | nindent 8 }}
+      {{- with .Values.web.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.web.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if eq .Values.web.podAntiAffinity "soft" }}
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    {{- include "moodle.selectorLabels" . | nindent 20 }}
+                    app.kubernetes.io/component: web
+      {{- else if eq .Values.web.podAntiAffinity "hard" }}
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchLabels:
+                  {{- include "moodle.selectorLabels" . | nindent 18 }}
+                  app.kubernetes.io/component: web
+      {{- end }}
+      {{- if .Values.topologySpread.enabled }}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              {{- include "moodle.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: web
+      {{- end }}

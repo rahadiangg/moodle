@@ -1,0 +1,61 @@
+{{- if .Values.install.enabled -}}
+{{- /*
+DB schema install/upgrade. pre-install + pre-upgrade hook, weight 0 (runs after
+the supporting ConfigMaps/Secret at weight -5, before the configure Job at 5).
+Goes DIRECT to RDS (install_db.host) — schema migration breaks under PgBouncer
+transaction pooling. The image entrypoint runs install_database/upgrade.php, then
+`exec`s our args and exits, so the Job completes. Does NOT mount the moodledata
+PVC: the schema lives in Postgres; moodledata is only scratch here.
+*/ -}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "moodle.fullname" . }}-db-migrate
+  labels:
+    {{- include "moodle.labels" . | nindent 4 }}
+    app.kubernetes.io/component: db-migrate
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "0"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: {{ .Values.install.backoffLimit }}
+  activeDeadlineSeconds: {{ .Values.install.activeDeadlineSeconds }}
+  template:
+    metadata:
+      labels:
+        {{- include "moodle.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: db-migrate
+    spec:
+      restartPolicy: Never
+      {{- include "moodle.imagePullSecrets" . | nindent 6 }}
+      serviceAccountName: {{ include "moodle.serviceAccountName" . }}
+      securityContext:
+        {{- include "moodle.podSecurityContext" . | nindent 8 }}
+      containers:
+        - name: db-migrate
+          image: {{ include "moodle.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- include "moodle.containerSecurityContext" . | nindent 12 }}
+          args: ["sh", "-c", "echo 'db-migrate: schema install/upgrade complete'"]
+          envFrom:
+            - configMapRef:
+                name: {{ include "moodle.fullname" . }}-env
+          env:
+            - name: AUTO_UPDATE_MOODLE
+              value: "true"             # the ONLY place schema upgrades run
+            - name: RUN_CRON_TASKS
+              value: "false"
+            - name: POST_CONFIGURE_COMMANDS
+              value: ""                 # don't touch config.php here
+            - name: DB_HOST            # DIRECT to RDS, bypass PgBouncer
+              value: {{ .Values.install_db.host | quote }}
+            - name: DB_PORT
+              value: {{ .Values.install_db.port | quote }}
+            - name: DB_DBHANDLEOPTIONS
+              value: "false"
+            {{- include "moodle.secretEnv" . | nindent 12 }}
+          resources:
+            {{- toYaml .Values.install.resources | nindent 12 }}
+{{- end }}

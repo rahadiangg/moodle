@@ -1,0 +1,112 @@
+{{- /*
+Scripts mounted at /scripts in web, cron, and both hook Jobs. These are STATIC
+(no Helm templating inside the shell bodies) and driven entirely by env vars, so
+they are safe to render and identical everywhere.
+  * post-configure.sh     — idempotent config.php edits; runs on EVERY pod via
+                            POST_CONFIGURE_COMMANDS (after config.php is generated).
+  * objectfs-configure.sh — moosh writes ObjectFS S3 settings to the DB; runs ONCE
+                            in the configure hook Job (not on web/cron).
+*/ -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "moodle.fullname" . }}-scripts
+  labels:
+    {{- include "moodle.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-5"
+    helm.sh/hook-delete-policy: before-hook-creation
+data:
+  post-configure.sh: |
+    #!/bin/sh
+    # Insert Moodle config overrides ABOVE the lib/setup.php require so they are
+    # read during bootstrap. Idempotent via a marker. busybox-safe (awk, no GNU sed).
+    set -eu
+    CONFIG=/var/www/html/config.php
+    MARKER='// moodle-chart: post-configure'
+    ANCHOR="require_once(__DIR__ . '/lib/setup.php');"
+
+    if [ ! -f "$CONFIG" ]; then
+      echo "post-configure: $CONFIG not found, skipping" >&2
+      exit 0
+    fi
+    if grep -qF "$MARKER" "$CONFIG"; then
+      echo "post-configure: already applied"
+      exit 0
+    fi
+
+    # Node-local cache/temp keep the shared NFS quiet.
+    BLOCK="$MARKER
+    \$CFG->localcachedir = '/var/www/localcache';
+    \$CFG->tempdir = '/var/www/moodletemp';"
+    if [ "${OBJECTFS_ENABLED:-false}" = "true" ]; then
+      BLOCK="$BLOCK
+    \$CFG->alternative_file_system_class = '\\tool_objectfs\\s3_file_system';"
+    fi
+
+    # Pass BLOCK via the environment, NOT `awk -v`: -v interprets C escapes and
+    # would mangle the PHP namespace backslashes (\t -> TAB). ENVIRON does not.
+    export BLOCK
+    tmp=$(mktemp)
+    awk -v anchor="$ANCHOR" '
+      index($0, anchor) && !done { print ENVIRON["BLOCK"]; done=1 }
+      { print }
+    ' "$CONFIG" > "$tmp"
+
+    if ! grep -qF "$MARKER" "$tmp"; then
+      echo "post-configure: anchor not found in config.php — refusing to start" >&2
+      rm -f "$tmp"
+      exit 1
+    fi
+    cat "$tmp" > "$CONFIG"
+    rm -f "$tmp"
+    echo "post-configure: applied"
+
+  wait-for-schema.sh: |
+    #!/bin/sh
+    # Gate web/cron pods until the DB schema exists (the migrate Job has run).
+    # Uses the pgsql extension (pg_connect) — the image ships pgsql, NOT pdo_pgsql.
+    # No Moodle bootstrap (config.php does not exist yet in an init container).
+    set -u
+    echo "wait-for-schema: waiting for ${DB_HOST}:${DB_PORT} table ${DB_PREFIX}config ..."
+    until php -r '
+      $h=getenv("DB_HOST"); $p=getenv("DB_PORT"); if($p==="") $p="5432";
+      $d=getenv("DB_NAME"); $u=getenv("DB_USER"); $w=getenv("DB_PASS"); $pre=getenv("DB_PREFIX");
+      $c=@pg_connect("host=$h port=$p dbname=$d user=$u password=$w connect_timeout=5");
+      if(!$c){ exit(1); }
+      $r=@pg_query($c, "SELECT to_regclass(\x27".$pre."config\x27)");
+      if(!$r){ exit(1); }
+      exit(pg_fetch_result($r,0,0) ? 0 : 1);
+    '; do
+      echo "wait-for-schema: not ready, retrying in 5s"
+      sleep 5
+    done
+    echo "wait-for-schema: schema present"
+
+  objectfs-configure.sh: |
+    #!/bin/sh
+    # Write ObjectFS S3 settings to the DB (mdl_config_plugins). Idempotent
+    # (moosh config-set is upsert). Runs once in the configure hook Job.
+    set -eu
+    if [ "${OBJECTFS_ENABLED:-false}" != "true" ]; then
+      echo "objectfs-configure: objectfs disabled, nothing to do"
+      exit 0
+    fi
+    cd /var/www/html
+    moosh -n config-set filesystem '\tool_objectfs\s3_file_system' tool_objectfs
+    moosh -n config-set enabletasks   "${OBJECTFS_ENABLETASKS:-1}"   tool_objectfs
+    moosh -n config-set sizethreshold "${OBJECTFS_SIZETHRESHOLD:-1048576}" tool_objectfs
+    moosh -n config-set deletelocal   "${OBJECTFS_DELETELOCAL:-1}"   tool_objectfs
+    moosh -n config-set signingmethod "${OBJECTFS_SIGNINGMETHOD:-s3}" tool_objectfs
+    moosh -n config-set s3_key      "$S3_ACCESS_KEY" tool_objectfs
+    moosh -n config-set s3_secret   "$S3_SECRET_KEY" tool_objectfs
+    moosh -n config-set s3_bucket   "$S3_BUCKET"     tool_objectfs
+    moosh -n config-set s3_region   "$S3_REGION"     tool_objectfs
+    moosh -n config-set s3_base_url "$S3_ENDPOINT"   tool_objectfs
+    # Presigned URLs: serve files via direct storage redirect instead of streaming through web pods.
+    moosh -n config-set enablepresignedurls  "${OBJECTFS_PRESIGNED_ENABLED:-0}"   tool_objectfs
+    moosh -n config-set expirationtime       "${OBJECTFS_PRESIGNED_EXPIRY:-7200}" tool_objectfs
+    moosh -n config-set presignedminfilesize "${OBJECTFS_PRESIGNED_MINSIZE:-0}"   tool_objectfs
+    moosh -n config-set signingwhitelist     "${OBJECTFS_PRESIGNED_WHITELIST:-*}" tool_objectfs
+    echo "objectfs-configure: applied"

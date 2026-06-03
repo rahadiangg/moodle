@@ -1,0 +1,100 @@
+# =============================================================================
+# Huawei Cloud CCE example overlay.
+# Shows how to target Huawei via the chart's GENERIC knobs — no Huawei-specific
+# template logic exists; everything is annotations/labels + values.
+#   helm upgrade --install moodle . -n moodle -f values-huawei.yaml
+# Committed to git: NO secrets here (use auth.existingSecret / existingSecret).
+# =============================================================================
+
+image:
+  # Huawei SWR registry path of your built image.
+  repository: swr.ap-southeast-4.myhuaweicloud.com/REPLACE_ORG/moodle-objectfs
+  tag: "4.5.11-2"
+  pullSecrets: [default-secret]        # CCE auto-injects 'default-secret' for SWR pulls
+
+site:
+  url: "https://moodle.example.com"
+  name: "Moodle"
+
+php:
+  pm: static
+  maxChildren: 100
+
+# One catch-all Secret holds every credential; the chart creates none.
+#   kubectl create secret generic moodle-secrets \
+#     --from-literal=db-password=... --from-literal=redis-password=... \
+#     --from-literal=admin-password=... \
+#     --from-literal=s3-access-key=... --from-literal=s3-secret-key=...
+auth:
+  existingSecret: "moodle-secrets"
+
+# RDS for PostgreSQL — direct, or via your own PgBouncer (then set the txn flags).
+externalDatabase:
+  host: "REPLACE_RDS_PRIMARY_ENDPOINT"   # or your PgBouncer service
+  port: 5432
+  name: "moodle"
+  user: "moodle"
+  dbHandleOptions: false                 # set true only when host is a txn-mode pooler
+  readReplica:
+    enabled: false
+    host: "REPLACE_RDS_REPLICA_ENDPOINT"
+
+install_db:                              # migrate Job target (bypass any pooler)
+  host: "REPLACE_RDS_PRIMARY_ENDPOINT"
+  port: 5432
+
+# DCS Redis (Primary/Standby, floating IP). Set maxmemory-policy = noeviction.
+externalRedis:
+  host: "REPLACE_DCS_REDIS_HOST"
+
+# ObjectFS -> Huawei OBS. The public OBS hostname resolves to an internal VPC IP.
+objectfs:
+  enabled: true
+  bucket: "REPLACE_OBS_BUCKET"
+  region: "ap-southeast-4"
+  endpoint: "https://obs.ap-southeast-4.myhuaweicloud.com"
+  sizeThreshold: 1048576
+  presignedUrls:
+    enabled: true
+    minFileSize: 1048576                 # only redirect large files
+
+# Shared moodledata on SFS Turbo (RWX). Confirm the class name: kubectl get sc
+persistence:
+  storageClass: "csi-sfsturbo"
+  accessMode: ReadWriteMany
+  size: 500Gi
+
+# Expose via the CCE native ELB Ingress — purely through generic annotations.
+ingress:
+  enabled: true
+  className: "cce"
+  annotations:
+    kubernetes.io/elb.class: "performance"      # union | performance (dedicated at scale)
+    kubernetes.io/elb.id: "REPLACE_ELB_ID"      # existing ELB id
+    kubernetes.io/elb.health-check-flag: "on"
+    kubernetes.io/elb.health-check-option: '{"protocol":"HTTP","path":"/fpm-ping"}'
+  hosts:
+    - host: "moodle.example.com"
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: "moodle-tls"
+      hosts: ["moodle.example.com"]
+
+# --- Alternative to Ingress: let CCE provision an ELB via a LoadBalancer Service ---
+# service:
+#   type: LoadBalancer
+#   annotations:
+#     kubernetes.io/elb.class: "performance"
+#     kubernetes.io/elb.id: "REPLACE_ELB_ID"
+
+autoscaling:
+  enabled: true
+  minReplicas: 4
+  maxReplicas: 40
+  targetCPUUtilizationPercentage: 60
+
+pdb:
+  enabled: true
+  minAvailable: "75%"
