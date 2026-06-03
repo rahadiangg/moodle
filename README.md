@@ -1,4 +1,4 @@
-# k8s-moodle
+# Moodle
 
 Run **Moodle** on Kubernetes. This repo gives you two things:
 
