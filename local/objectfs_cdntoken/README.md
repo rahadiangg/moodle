@@ -21,7 +21,7 @@ gating) is inherited unchanged. ObjectFS is installed vanilla alongside it.
 **Method A format:**
 
 ```
-auth_key = "<ts>-<rand>-<uid>-" + md5("<uri>-<ts>-<rand>-<uid>-<key>")
+auth_key = "<ts>-<rand>-<uid>-" + HASH("<uri>-<ts>-<rand>-<uid>-<key>")   # HASH = sha256 (default) or md5
 URL      = "<scheme>://<cdn-domain><uri>?<authParam>=<auth_key>"
 ```
 where `<uri>` is the object key path (`/<key_prefix><aa>/<bb>/<sha1>`) and `<key>`
@@ -49,6 +49,7 @@ CDN token-auth signed URLs** (component `local_objectfs_cdntoken`):
 | `cdndomain` | CDN/acceleration domain host, e.g. `cdn.example.com` |
 | `cdnscheme` | `https` (default) or `http` |
 | `signingmethod` | `tokenA` (only option today) |
+| `algorithm` | `sha256` (recommended) or `md5` — must match the CDN's "Encryption Algorithm" |
 | `signingkey` | shared secret, identical to the CDN's token-auth key |
 | `authparam` | query-param name the CDN expects (default `auth_key`) |
 | `validity` | seconds; **must equal** the CDN-configured validity window |

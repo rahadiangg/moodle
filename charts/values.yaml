@@ -147,7 +147,8 @@ objectfs:
     enabled: false
     domain: ""                        # CDN/acceleration domain host, e.g. cdn.example.com
     scheme: "https"                   # https | http
-    signingMethod: "tokenA"           # CDN token scheme (Method A: auth_key=ts-rand-uid-md5)
+    signingMethod: "tokenA"           # CDN token scheme (Method A: auth_key=ts-rand-uid-hash)
+    algorithm: "sha256"               # hash for auth_key: sha256 (recommended) | md5 — MUST match the CDN
     authParam: "auth_key"             # query param the CDN expects
     validity: 1800                    # seconds; MUST equal the CDN-configured validity window
     uid: "0"                          # Method-A uid field (usually 0)

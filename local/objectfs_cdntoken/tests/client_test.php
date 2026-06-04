@@ -47,6 +47,7 @@ final class client_test extends \advanced_testcase {
             'authparam'  => 'auth_key',
             'validity'   => 1800,
             'uid'        => '0',
+            'algorithm'  => 'sha256',
         ];
         foreach ($cfg as $k => $v) {
             set_config($k, $v, 'local_objectfs_cdntoken');
@@ -55,18 +56,22 @@ final class client_test extends \advanced_testcase {
 
     // ---- Pure static helpers (no Moodle/AWS needed) -------------------------
 
-    public function test_methoda_authkey_format_and_md5(): void {
+    public function test_methoda_authkey_sha256_default_and_md5(): void {
         $filename = '/da/39/' . self::HASH;
         $ts = 1700000000;
-        $authkey = client::methoda_authkey($filename, 'topsecret', '0', '0', $ts);
+        $sstring = $filename . '-' . $ts . '-0-0-topsecret';
 
-        $parts = explode('-', $authkey);
+        // Default = sha256.
+        $parts = explode('-', client::methoda_authkey($filename, 'topsecret', '0', '0', $ts));
         $this->assertCount(4, $parts);
         $this->assertSame((string)$ts, $parts[0]);
         $this->assertSame('0', $parts[1]);          // rand
         $this->assertSame('0', $parts[2]);          // uid
-        $expected = md5($filename . '-' . $ts . '-0-0-topsecret');
-        $this->assertSame($expected, $parts[3]);
+        $this->assertSame(hash('sha256', $sstring), $parts[3]);
+
+        // Explicit md5.
+        $md5parts = explode('-', client::methoda_authkey($filename, 'topsecret', '0', '0', $ts, 'md5'));
+        $this->assertSame(md5($sstring), $md5parts[3]);
     }
 
     public function test_normalize_filename_empty_prefix(): void {
@@ -117,7 +122,7 @@ final class client_test extends \advanced_testcase {
         $this->assertSame('0', $uid);
         $this->assertGreaterThanOrEqual($before, (int)$ts);
         $this->assertLessThanOrEqual($after, (int)$ts);
-        $this->assertSame(md5($filename . '-' . $ts . '-0-0-topsecret'), $hash);
+        $this->assertSame(hash('sha256', $filename . '-' . $ts . '-0-0-topsecret'), $hash);
 
         // expiresat = signing ts + validity.
         $this->assertSame((int)$ts + 1800, (int)$signed->expiresat);
@@ -164,7 +169,28 @@ final class client_test extends \advanced_testcase {
         $authkey = $client->generate_presigned_url(self::HASH)->url->get_param('auth_key');
         [$ts, $rand, $uid, $hash] = explode('-', $authkey);
         $this->assertSame('42', $uid);
-        $this->assertSame(md5('/da/39/' . self::HASH . '-' . $ts . '-0-42-topsecret'), $hash);
+        $this->assertSame(hash('sha256', '/da/39/' . self::HASH . '-' . $ts . '-0-42-topsecret'), $hash);
+    }
+
+    public function test_md5_algorithm(): void {
+        $this->set_cdn_config(['algorithm' => 'md5']);
+        $client = $this->make_client('');
+        $authkey = $client->generate_presigned_url(self::HASH)->url->get_param('auth_key');
+        [$ts, , , $hash] = explode('-', $authkey);
+        $this->assertSame(32, strlen($hash));   // md5 = 32 hex chars (sha256 = 64)
+        $this->assertSame(md5('/da/39/' . self::HASH . '-' . $ts . '-0-0-topsecret'), $hash);
+    }
+
+    public function test_admin_client_resolution_shim(): void {
+        // ObjectFS admin pages derive the client class from the filesystem class;
+        // the shim must make that resolve to (a subclass of) our client.
+        $this->assertTrue(is_subclass_of('\local_objectfs_cdntoken\file_system\client', client::class));
+        $derived = '\\' . ltrim(
+            \tool_objectfs\local\manager::get_client_classname_from_fs('\\local_objectfs_cdntoken\\file_system'),
+            '\\');
+        $this->assertTrue(class_exists($derived), "derived client class {$derived} must exist");
+        $this->assertTrue($derived === '\\' . client::class || is_subclass_of($derived, client::class),
+            "{$derived} must be our client or a subclass");
     }
 
     public function test_throws_when_domain_empty(): void {

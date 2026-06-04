@@ -6,10 +6,10 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'local_objectfs_cdntoken';
-$plugin->version   = 2026060400;
+$plugin->version   = 2026060401;
 $plugin->requires  = 2024100700;   // Moodle 4.5.0
 $plugin->maturity  = MATURITY_STABLE;
-$plugin->release   = '1.0.0';
+$plugin->release   = '1.1.0';      // configurable sha256/md5 + admin-page client shim
 // Hard dependency: our classes extend tool_objectfs classes, which must exist.
 $plugin->dependencies = [
     'tool_objectfs' => ANY_VERSION,

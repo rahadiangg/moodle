@@ -54,6 +54,8 @@ class client extends \tool_objectfs\local\store\s3\client {
         }
         $uid = (isset($cfg->uid) && $cfg->uid !== '') ? (string)$cfg->uid : '0';
         $rand = '0';
+        // Hash algorithm must match the CDN's "Encryption Algorithm" setting.
+        $algo = (isset($cfg->algorithm) && $cfg->algorithm === 'md5') ? 'md5' : 'sha256';
 
         // Object key path the CDN serves, e.g. /aa/bb/<sha1> (with optional prefix).
         // bucketkeyprefix + get_filepath_from_hash() are inherited from the S3 client.
@@ -61,7 +63,7 @@ class client extends \tool_objectfs\local\store\s3\client {
             $this->bucketkeyprefix, $this->get_filepath_from_hash($contenthash));
 
         $ts = time();
-        $authvalue = self::methoda_authkey($filename, $key, $uid, $rand, $ts);
+        $authvalue = self::methoda_authkey($filename, $key, $uid, $rand, $ts, $algo);
 
         // Build via params array so the value is encoded correctly; hex path needs no encoding.
         $url = new \moodle_url($scheme . '://' . $domain . $filename, [$authparam => $authvalue]);
@@ -87,7 +89,7 @@ class client extends \tool_objectfs\local\store\s3\client {
      * Compute a Huawei/Method-A auth_key value for a path.
      *
      * sstring  = "<filename>-<ts>-<rand>-<uid>-<key>"
-     * auth_key = "<ts>-<rand>-<uid>-md5(sstring)"
+     * auth_key = "<ts>-<rand>-<uid>-HASH(sstring)"   HASH = sha256 (default) or md5
      * Pure string logic (no Moodle deps) so it is unit-testable in isolation.
      *
      * @param string $filename Signed URI path (leading slash, no query).
@@ -95,10 +97,13 @@ class client extends \tool_objectfs\local\store\s3\client {
      * @param string $uid      uid component (usually '0').
      * @param string $rand     rand component (usually '0').
      * @param int    $ts       Unix signing timestamp.
+     * @param string $algo     'sha256' (default, recommended) or 'md5' — must
+     *                         match the CDN's Encryption Algorithm setting.
      * @return string The auth_key parameter value.
      */
-    public static function methoda_authkey($filename, $key, $uid, $rand, $ts) {
+    public static function methoda_authkey($filename, $key, $uid, $rand, $ts, $algo = 'sha256') {
         $sstring = $filename . '-' . $ts . '-' . $rand . '-' . $uid . '-' . $key;
-        return $ts . '-' . $rand . '-' . $uid . '-' . md5($sstring);
+        $hash = ($algo === 'md5') ? md5($sstring) : hash('sha256', $sstring);
+        return $ts . '-' . $rand . '-' . $uid . '-' . $hash;
     }
 }

@@ -44,6 +44,15 @@ if ($hassiteconfig) {
         ['tokenA' => get_string('signingmethod:tokenA', 'local_objectfs_cdntoken')]
     ));
 
+    // Hash algorithm — must match the CDN's "Encryption Algorithm" setting.
+    $settings->add(new admin_setting_configselect(
+        'local_objectfs_cdntoken/algorithm',
+        get_string('algorithm', 'local_objectfs_cdntoken'),
+        get_string('algorithm_desc', 'local_objectfs_cdntoken'),
+        'sha256',
+        ['sha256' => 'SHA256', 'md5' => 'MD5']
+    ));
+
     $settings->add(new admin_setting_configpasswordunmask(
         'local_objectfs_cdntoken/signingkey',
         get_string('signingkey', 'local_objectfs_cdntoken'),

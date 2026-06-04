@@ -16,7 +16,10 @@ $string['cdnscheme_desc'] = 'URL scheme for the signed CDN links. Use https in p
 
 $string['signingmethod'] = 'Signing method';
 $string['signingmethod_desc'] = 'CDN token-authentication scheme used to sign URLs.';
-$string['signingmethod:tokenA'] = 'Method A (auth_key=timestamp-rand-uid-md5)';
+$string['signingmethod:tokenA'] = 'Method A (auth_key=timestamp-rand-uid-hash)';
+
+$string['algorithm'] = 'Encryption algorithm';
+$string['algorithm_desc'] = 'Hash used to compute the auth_key. MUST match the CDN\'s "Encryption Algorithm" setting. SHA256 is recommended; MD5 is supported for legacy CDN configs.';
 
 $string['signingkey'] = 'Signing key';
 $string['signingkey_desc'] = 'Shared secret configured on the CDN token-authentication settings. Used to compute the MD5 auth_key. Keep secret.';

@@ -14,7 +14,7 @@ image:
   # The "-cdntoken" variant (built with --build-arg INCLUDE_CDN_PLUGIN=true) is
   # REQUIRED because objectfs.cdn.enabled is true below. Use the plain tag
   # (e.g. "4.5.11-3") if you set objectfs.cdn.enabled: false.
-  tag: "4.5.11-3-cdntoken"
+  tag: "4.5.11-4-cdntoken"
   pullSecrets: [default-secret]        # CCE auto-injects 'default-secret' for SWR pulls
 
 site:
@@ -71,6 +71,7 @@ objectfs:
     enabled: true
     domain: "REPLACE_CDN_DOMAIN"         # e.g. cdn.moodle.example.com
     validity: 1800
+    algorithm: "sha256"                  # MUST match the CDN "Encryption Algorithm" (SHA256 recommended)
     # signingMethod/authParam/scheme/uid use chart defaults (tokenA/auth_key/https/0)
 
 # Shared moodledata on SFS Turbo (RWX).

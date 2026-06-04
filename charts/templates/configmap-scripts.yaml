@@ -121,6 +121,7 @@ data:
       moosh -n config-set cdndomain     "${OBJECTFS_CDN_DOMAIN}"         local_objectfs_cdntoken
       moosh -n config-set cdnscheme     "${OBJECTFS_CDN_SCHEME:-https}"  local_objectfs_cdntoken
       moosh -n config-set signingmethod "${OBJECTFS_CDN_METHOD:-tokenA}" local_objectfs_cdntoken
+      moosh -n config-set algorithm     "${OBJECTFS_CDN_ALGORITHM:-sha256}" local_objectfs_cdntoken
       moosh -n config-set authparam     "${OBJECTFS_CDN_AUTHPARAM:-auth_key}" local_objectfs_cdntoken
       moosh -n config-set validity      "${OBJECTFS_CDN_VALIDITY:-1800}" local_objectfs_cdntoken
       moosh -n config-set uid           "${OBJECTFS_CDN_UID:-0}"         local_objectfs_cdntoken

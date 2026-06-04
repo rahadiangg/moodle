@@ -61,9 +61,9 @@ and pods will fail to boot if `objectfs.cdn.enabled` is true.
 ```bash
 # Build both variants from the one Dockerfile (run from repo root):
 docker buildx build --provenance=false --sbom=false \
-  -t <reg>/moodle-objectfs:4.5.11-3 --push .
+  -t <reg>/moodle-objectfs:4.5.11-4 --push .
 docker buildx build --provenance=false --sbom=false --build-arg INCLUDE_CDN_PLUGIN=true \
-  -t <reg>/moodle-objectfs:4.5.11-3-cdntoken --push .
+  -t <reg>/moodle-objectfs:4.5.11-4-cdntoken --push .
 ```
 
 **CDN console checklist** (the chart cannot do this — it's cloud config):
@@ -71,7 +71,8 @@ docker buildx build --provenance=false --sbom=false --build-arg INCLUDE_CDN_PLUG
 2. Origin = the OBS bucket; turn **OBS Pull Authentication ON** (bucket stays private).
 3. Enable **Token Authentication, Signing Method A**: signing key == the Secret's
    `cdn-signing-key`; validity window == `objectfs.cdn.validity` (1800s here);
-   parameter name == `auth_key`.
+   parameter name == `auth_key`; **Encryption Algorithm == `objectfs.cdn.algorithm`**
+   (SHA256 recommended — must match exactly or every request 403s).
 4. **Cache key: IGNORE the `auth_key` parameter** — otherwise every user's signed
    URL is a distinct cache key and the cache (and egress offload) is defeated.
 5. Long cache TTL for the object path prefix (content-hash objects are immutable).
