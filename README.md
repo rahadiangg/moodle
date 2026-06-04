@@ -56,7 +56,7 @@ Two things to know:
 **1. Build and push the image** (from this folder):
 ```bash
 docker buildx build --platform linux/amd64 --provenance=false --sbom=false \
-  -t <your-registry>/moodle-objectfs:4.5.11-2 --push .
+  -t <your-registry>/moodle-objectfs:4.5.11-4 --push .
 ```
 
 **2. Create a Secret with your credentials:**
@@ -81,6 +81,18 @@ helm upgrade --install moodle charts -n moodle --create-namespace \
 Full configuration reference and a local test (with MinIO standing in for object storage)
 are in **[charts/README.md](charts/README.md)**.
 
+## Documentation
+
+Start here and follow the link for what you need:
+
+| Doc | What's in it |
+|---|---|
+| **[charts/README.md](charts/README.md)** | Full chart configuration reference + local end-to-end test |
+| **[examples/](examples/)** | Ready cloud overlays — [Huawei CCE](examples/huawei-cce/) · [AWS EKS](examples/aws-eks/). Each includes its required `ReadWriteMany` StorageClass + a prerequisites README. |
+| **[docs/cdn.md](docs/cdn.md)** | **CDN file delivery** (optional): *why* it's needed, architecture, step-by-step CDN console setup, and operations/troubleshooting |
+| **[local/objectfs_cdntoken/](local/objectfs_cdntoken/README.md)** | The provider-neutral CDN token-auth signer plugin (how it extends ObjectFS, supported CDNs) |
+| **[CONTRIBUTING.md](CONTRIBUTING.md)** | Dev setup, running tests, conventions |
+
 ## Good to know
 
 - **Moodle 4.5 LTS** — the ObjectFS plugin officially supports 4.5, not Moodle 5.x yet.
@@ -88,6 +100,9 @@ are in **[charts/README.md](charts/README.md)**.
   the build command includes `--provenance=false --sbom=false`.
 - **On Huawei CCE Turbo**, allow the pod network range (e.g. `172.16.0.0/12`) in your
   database/Redis firewall rules — pods connect with their own IPs.
+- **Optional CDN delivery** — serve user files through a CDN in front of a *private*
+  object-storage bucket (edge-cached, token-signed, expiring). Off by default; see
+  **[docs/cdn.md](docs/cdn.md)**.
 
 ## Contributing
 

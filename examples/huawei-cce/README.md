@@ -54,6 +54,9 @@ This example enables `objectfs.cdn` so file downloads (PDF/Word/Excel/media) are
 served from **Huawei Cloud CDN** in front of the **private** OBS bucket — cached
 at the edge, with the OBS bucket staying private and links expiring.
 
+> Full rationale, architecture, and operations/troubleshooting are in
+> **[docs/cdn.md](../../docs/cdn.md)**. The checklist below is the Huawei-specific quick path.
+
 **Image requirement:** use the **`-cdntoken`** image variant (built with
 `--build-arg INCLUDE_CDN_PLUGIN=true`). The base image lacks the signer plugin
 and pods will fail to boot if `objectfs.cdn.enabled` is true.

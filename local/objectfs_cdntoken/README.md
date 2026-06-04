@@ -9,6 +9,10 @@ It does **not** fork or modify ObjectFS. It subclasses two ObjectFS classes and
 overrides one method; everything else (upload, verify, streaming, presigned
 gating) is inherited unchanged. ObjectFS is installed vanilla alongside it.
 
+> For the full picture — *why* this exists, the architecture, CDN console setup,
+> and operations/troubleshooting — see **[docs/cdn.md](../../docs/cdn.md)**. This
+> README is the plugin-level reference.
+
 ## How it works
 
 1. A user requests a file → Moodle `pluginfile.php` runs the normal **capability
