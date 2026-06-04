@@ -56,7 +56,7 @@ Two things to know:
 **1. Build and push the image** (from this folder):
 ```bash
 docker buildx build --platform linux/amd64 --provenance=false --sbom=false \
-  -t <your-registry>/moodle-objectfs:4.5.11-4 --push .
+  -t <your-registry>/moodle-objectfs:4.5.11-5 --push .
 ```
 
 **2. Create a Secret with your credentials:**

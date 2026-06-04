@@ -64,9 +64,9 @@ and pods will fail to boot if `objectfs.cdn.enabled` is true.
 ```bash
 # Build both variants from the one Dockerfile (run from repo root):
 docker buildx build --provenance=false --sbom=false \
-  -t <reg>/moodle-objectfs:4.5.11-4 --push .
+  -t <reg>/moodle-objectfs:4.5.11-5 --push .
 docker buildx build --provenance=false --sbom=false --build-arg INCLUDE_CDN_PLUGIN=true \
-  -t <reg>/moodle-objectfs:4.5.11-4-cdntoken --push .
+  -t <reg>/moodle-objectfs:4.5.11-5-cdntoken --push .
 ```
 
 **CDN console checklist** (the chart cannot do this — it's cloud config):

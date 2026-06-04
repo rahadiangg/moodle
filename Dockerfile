@@ -95,6 +95,24 @@ RUN set -eux; \
       "$conf"; \
     grep -E '^pm(\s*=|\.max_children|\.max_requests)' "$conf"
 
+# Quote human-input args in the base image's install script. Upstream passes
+# `--fullname=$MOODLE_SITENAME` etc. UNQUOTED, so a site name with spaces (e.g.
+# "Pesona Edukasi") breaks first install with "Unrecognised options". Targeted
+# (only the human-input args); the grep guard fails the build if the upstream
+# script is renamed/changed so the patch can't silently no-op.
+USER root
+RUN set -eux; \
+    s=/docker-entrypoint-init.d/02-configure-moodle.sh; \
+    sed -i \
+      -e 's/--fullname=\$MOODLE_SITENAME/--fullname="$MOODLE_SITENAME"/g' \
+      -e 's/--adminpass=\$MOODLE_PASSWORD/--adminpass="$MOODLE_PASSWORD"/g' \
+      -e 's/--username=\$MOODLE_USERNAME/--username="$MOODLE_USERNAME"/g' \
+      -e 's/--password=\$MOODLE_PASSWORD/--password="$MOODLE_PASSWORD"/g' \
+      -e 's/--email=\$MOODLE_EMAIL/--email="$MOODLE_EMAIL"/g' \
+      "$s"; \
+    grep -qF -- '--fullname="$MOODLE_SITENAME"' "$s"; \
+    grep -qF -- '--adminpass="$MOODLE_PASSWORD"' "$s"
+
 # Defaults match the stock image (ondemand/100); the chart overrides via env.
 ENV PHP_FPM_PM=ondemand \
     PHP_FPM_MAX_CHILDREN=100 \

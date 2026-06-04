@@ -13,8 +13,8 @@ image:
   repository: swr.ap-southeast-4.myhuaweicloud.com/REPLACE_ORG/moodle-objectfs
   # The "-cdntoken" variant (built with --build-arg INCLUDE_CDN_PLUGIN=true) is
   # REQUIRED because objectfs.cdn.enabled is true below. Use the plain tag
-  # (e.g. "4.5.11-3") if you set objectfs.cdn.enabled: false.
-  tag: "4.5.11-4-cdntoken"
+  # (e.g. "4.5.11-5") if you set objectfs.cdn.enabled: false.
+  tag: "4.5.11-5-cdntoken"
   pullSecrets: [default-secret]        # CCE auto-injects 'default-secret' for SWR pulls
 
 site:
