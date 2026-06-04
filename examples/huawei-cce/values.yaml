@@ -2,14 +2,19 @@
 # Huawei Cloud CCE example overlay.
 # Shows how to target Huawei via the chart's GENERIC knobs — no Huawei-specific
 # template logic exists; everything is annotations/labels + values.
-#   helm upgrade --install moodle . -n moodle -f values-huawei.yaml
+#   helm upgrade --install moodle charts -n moodle -f examples/huawei-cce/values.yaml
 # Committed to git: NO secrets here (use auth.existingSecret / existingSecret).
+# PREREQS (see README.md in this folder): pre-create an SFS Turbo filesystem,
+# apply sfsturbo-subpath-storageclass.yaml, and open the SFS Turbo security group.
 # =============================================================================
 
 image:
   # Huawei SWR registry path of your built image.
   repository: swr.ap-southeast-4.myhuaweicloud.com/REPLACE_ORG/moodle-objectfs
-  tag: "4.5.11-2"
+  # The "-cdntoken" variant (built with --build-arg INCLUDE_CDN_PLUGIN=true) is
+  # REQUIRED because objectfs.cdn.enabled is true below. Use the plain tag
+  # (e.g. "4.5.11-3") if you set objectfs.cdn.enabled: false.
+  tag: "4.5.11-3-cdntoken"
   pullSecrets: [default-secret]        # CCE auto-injects 'default-secret' for SWR pulls
 
 site:
@@ -56,13 +61,27 @@ objectfs:
   sizeThreshold: 1048576
   presignedUrls:
     enabled: true
-    minFileSize: 1048576                 # only redirect large files
+    minFileSize: 0                       # 0 so documents (PDF/Word/Excel) also go via CDN
+    whitelist: "*"                       # all file types eligible for CDN redirect
+  # Deliver files through Huawei Cloud CDN (Token Auth Method A) in front of the
+  # PRIVATE OBS bucket. Requires the "-cdntoken" image (set above) and CDN-side
+  # config (see README). Signing key goes in the moodle-secrets Secret as
+  # 'cdn-signing-key'. validity MUST equal the CDN-configured token validity.
+  cdn:
+    enabled: true
+    domain: "REPLACE_CDN_DOMAIN"         # e.g. cdn.moodle.example.com
+    validity: 1800
+    # signingMethod/authParam/scheme/uid use chart defaults (tokenA/auth_key/https/0)
 
-# Shared moodledata on SFS Turbo (RWX). Confirm the class name: kubectl get sc
+# Shared moodledata on SFS Turbo (RWX).
+# NOTE: the default 'csi-sfsturbo' StorageClass CANNOT dynamically create a new
+# SFS Turbo on CCE (fails: "unsupported to create a new sfsturbo resource").
+# You MUST pre-create one SFS Turbo filesystem and apply the subpath StorageClass
+# in this folder (sfsturbo-subpath-storageclass.yaml), then reference it here.
 persistence:
-  storageClass: "csi-sfsturbo"
+  storageClass: "csi-sfsturbo-subpath"
   accessMode: ReadWriteMany
-  size: 500Gi
+  size: 500Gi                          # SFS Turbo STANDARD minimum is 500 GiB
 
 # Expose via the CCE native ELB Ingress — purely through generic annotations.
 ingress:

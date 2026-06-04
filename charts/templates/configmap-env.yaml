@@ -69,6 +69,16 @@ data:
   OBJECTFS_PRESIGNED_MINSIZE: {{ .Values.objectfs.presignedUrls.minFileSize | quote }}
   OBJECTFS_PRESIGNED_EXPIRY: {{ .Values.objectfs.presignedUrls.expiry | quote }}
   OBJECTFS_PRESIGNED_WHITELIST: {{ .Values.objectfs.presignedUrls.whitelist | quote }}
+  # CDN token-auth delivery (non-secret facts; signing key comes via Secret env).
+  OBJECTFS_CDN_ENABLED: {{ ternary "1" "0" .Values.objectfs.cdn.enabled | quote }}
+  {{- if .Values.objectfs.cdn.enabled }}
+  OBJECTFS_CDN_DOMAIN: {{ .Values.objectfs.cdn.domain | quote }}
+  OBJECTFS_CDN_SCHEME: {{ .Values.objectfs.cdn.scheme | quote }}
+  OBJECTFS_CDN_METHOD: {{ .Values.objectfs.cdn.signingMethod | quote }}
+  OBJECTFS_CDN_AUTHPARAM: {{ .Values.objectfs.cdn.authParam | quote }}
+  OBJECTFS_CDN_VALIDITY: {{ .Values.objectfs.cdn.validity | quote }}
+  OBJECTFS_CDN_UID: {{ .Values.objectfs.cdn.uid | quote }}
+  {{- end }}
   {{- end }}
 
   # Runs after config.php generation on every pod (idempotent config.php edits)

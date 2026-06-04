@@ -1,0 +1,42 @@
+# =============================================================================
+# SFS Turbo subpath StorageClass for Huawei Cloud CCE.
+#
+# WHY: CCE's default `csi-sfsturbo` StorageClass cannot dynamically create a new
+# SFS Turbo filesystem per PVC — provisioning fails with:
+#   "unsupported to create a new sfsturbo resource, check the value of
+#    everest.io/volume-as"
+# The supported pattern is to pre-create ONE SFS Turbo filesystem and have this
+# StorageClass carve a subdirectory (subpath) into it for each PVC. One
+# filesystem backs many PVCs, which is also the cost-efficient approach.
+#
+# PREREQUISITES:
+#   1. Create an SFS Turbo filesystem in the SAME VPC as the cluster nodes,
+#      capacity >= 500 GiB (STANDARD minimum), type STANDARD or PERFORMANCE.
+#   2. Open its security group to the node subnet for NFS:
+#      TCP+UDP 2049 (nfs), 111 (rpcbind), and 20048 (mountd).
+#   3. From the SFS Turbo detail page, copy the File system ID (UUID) and the
+#      shared path / mount address (e.g. 192.168.0.2:/) into the REPLACE_ values.
+#
+# APPLY:  kubectl apply -f examples/huawei-cce/sfsturbo-subpath-storageclass.yaml
+# Then reference it in values.yaml:  persistence.storageClass: csi-sfsturbo-subpath
+# =============================================================================
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: csi-sfsturbo-subpath
+allowVolumeExpansion: true
+mountOptions:
+  - lock
+parameters:
+  csi.storage.k8s.io/csi-driver-name: sfsturbo.csi.everest.io
+  csi.storage.k8s.io/fstype: nfs
+  everest.io/archive-on-delete: "true"          # keep data on PVC delete (safety)
+  everest.io/share-expand-type: bandwidth
+  everest.io/share-source: sfs-turbo
+  everest.io/share-volume-type: STANDARD        # match the filesystem type you created
+  everest.io/volume-as: subpath
+  everest.io/volume-id: REPLACE_SFSTURBO_FILESYSTEM_ID        # UUID from SFS Turbo console
+  everest.io/share-export-location: REPLACE_MOUNT_ADDR        # e.g. 192.168.0.2:/
+provisioner: everest-csi-provisioner
+reclaimPolicy: Delete
+volumeBindingMode: Immediate

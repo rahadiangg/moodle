@@ -72,7 +72,7 @@ kubectl -n moodle create secret generic moodle-secrets \
 **3. Install the chart** (edit a values file first with your hosts/bucket):
 ```bash
 helm upgrade --install moodle charts -n moodle --create-namespace \
-  --set auth.existingSecret=moodle-secrets -f examples/values-aws.yaml
+  --set auth.existingSecret=moodle-secrets -f examples/aws-eks/values.yaml
 ```
 
 > `charts/values.yaml` is the cloud-agnostic default with every option documented inline.

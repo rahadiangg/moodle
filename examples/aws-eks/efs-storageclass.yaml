@@ -1,0 +1,29 @@
+# =============================================================================
+# Amazon EFS StorageClass for AWS EKS (shared moodledata, ReadWriteMany).
+#
+# Moodle requires a shared dataroot across all web/cron pods, so the volume must
+# be RWX. On EKS that means Amazon EFS via the EFS CSI driver (EBS/gp3 is RWO and
+# will NOT work for multiple pods on different nodes).
+#
+# PREREQUISITES:
+#   1. Install the AWS EFS CSI driver (e.g. EKS add-on 'aws-efs-csi-driver').
+#   2. Create an EFS filesystem in the cluster VPC, with mount targets in each
+#      node subnet, and a security group allowing NFS (TCP 2049) from the nodes.
+#   3. Put the EFS filesystem ID (fs-xxxxxxxx) into provisioner parameters below.
+#
+# APPLY:  kubectl apply -f examples/aws-eks/efs-storageclass.yaml
+# Then reference it in values.yaml:  persistence.storageClass: efs-sc
+# Docs: https://github.com/kubernetes-sigs/aws-efs-csi-driver
+# =============================================================================
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: efs-sc
+provisioner: efs.csi.aws.com
+parameters:
+  provisioningMode: efs-ap                 # dynamic access points per PVC
+  fileSystemId: REPLACE_EFS_FILESYSTEM_ID  # e.g. fs-0123456789abcdef0
+  directoryPerms: "700"
+  basePath: "/moodle"                       # subdir under which access points are created
+reclaimPolicy: Retain
+volumeBindingMode: Immediate

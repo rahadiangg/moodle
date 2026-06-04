@@ -61,6 +61,10 @@ only rendered when auth.existingSecret is empty (see secret.yaml).
 {{- define "moodle.objectStoreSecretName" -}}
 {{- default (include "moodle.defaultSecretName" .) .Values.objectfs.existingSecret -}}
 {{- end -}}
+{{- define "moodle.cdnSecretName" -}}
+{{- $fallback := default (include "moodle.defaultSecretName" .) .Values.objectfs.existingSecret -}}
+{{- default $fallback .Values.objectfs.cdn.existingSecret -}}
+{{- end -}}
 {{- define "moodle.adminSecretName" -}}
 {{- include "moodle.defaultSecretName" . -}}
 {{- end -}}
@@ -103,6 +107,13 @@ freshly generated config.php is identical everywhere. Conditional on features.
     secretKeyRef:
       name: {{ include "moodle.objectStoreSecretName" . }}
       key: s3-secret-key
+{{- if .Values.objectfs.cdn.enabled }}
+- name: CDN_SIGNING_KEY
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "moodle.cdnSecretName" . }}
+      key: cdn-signing-key
+{{- end }}
 {{- end }}
 {{- end -}}
 

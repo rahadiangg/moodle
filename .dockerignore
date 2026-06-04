@@ -1,5 +1,8 @@
-# The Dockerfile copies nothing into the image (plugins are git-cloned at build),
-# so nothing from the build context is needed. Keep the context tiny.
+# Most plugins are git-cloned at build time. The only thing COPYed from the
+# build context is the optional CDN signer at local/objectfs_cdntoken/ (staged
+# always, installed only when --build-arg INCLUDE_CDN_PLUGIN=true). Keep the
+# rest of the context out.
 charts/
+examples/
 *.md
 .git/

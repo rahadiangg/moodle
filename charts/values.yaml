@@ -1,7 +1,7 @@
 # =============================================================================
 # Moodle — default values (cloud-agnostic, dev-friendly).
 # Cloud-specific bits (storage class, object-storage endpoint, image registry,
-# load-balancer annotations) are left generic here; see values-huawei.yaml for a
+# load-balancer annotations) are left generic here; see examples/huawei-cce/ for a
 # worked Huawei Cloud CCE example. Secrets should ALWAYS come from existingSecret
 # in production; the inline `auth.*` fields exist only for local/dev.
 # =============================================================================
@@ -137,6 +137,21 @@ objectfs:
     minFileSize: 0                    # bytes; only redirect files >= this size (0 = all)
     expiry: 7200                      # seconds the signed URL stays valid
     whitelist: "*"                    # file types eligible for redirect ('*' = all)
+  # CDN token-auth delivery (provider-neutral, OPT-IN, default off). Redirects
+  # downloads to a CDN that signs URLs with an auth_key the edge validates
+  # (Method A: works for Huawei/Alibaba/Tencent CDN). Caches well + offloads
+  # origin egress while keeping the bucket private and links expiring.
+  # REQUIRES an image built with --build-arg INCLUDE_CDN_PLUGIN=true (the
+  # "-cdntoken" variant); enabling this on the base image fails at boot.
+  cdn:
+    enabled: false
+    domain: ""                        # CDN/acceleration domain host, e.g. cdn.example.com
+    scheme: "https"                   # https | http
+    signingMethod: "tokenA"           # CDN token scheme (Method A: auth_key=ts-rand-uid-md5)
+    authParam: "auth_key"             # query param the CDN expects
+    validity: 1800                    # seconds; MUST equal the CDN-configured validity window
+    uid: "0"                          # Method-A uid field (usually 0)
+    existingSecret: ""                # holds key 'cdn-signing-key'; falls back to objectfs/auth secret
 
 # -----------------------------------------------------------------------------
 # Shared moodledata (ReadWriteMany) — REQUIRED even with ObjectFS.
@@ -224,6 +239,7 @@ auth:
   adminEmail: "admin@example.com"
   s3AccessKey: ""
   s3SecretKey: ""
+  cdnSigningKey: ""                   # CDN token-auth signing key (only if objectfs.cdn.enabled)
 
 # -----------------------------------------------------------------------------
 # Phase-2 toggles (stubbed; default off)

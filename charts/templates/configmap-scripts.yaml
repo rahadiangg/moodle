@@ -41,8 +41,14 @@ data:
     \$CFG->localcachedir = '/var/www/localcache';
     \$CFG->tempdir = '/var/www/moodletemp';"
     if [ "${OBJECTFS_ENABLED:-false}" = "true" ]; then
+      # CDN-enabled deployments use our signing subclass; otherwise stock S3.
+      # (single backslashes: this value is inserted verbatim via $FSCLASS below)
+      FSCLASS='\tool_objectfs\s3_file_system'
+      if [ "${OBJECTFS_CDN_ENABLED:-0}" = "1" ]; then
+        FSCLASS='\local_objectfs_cdntoken\file_system'
+      fi
       BLOCK="$BLOCK
-    \$CFG->alternative_file_system_class = '\\tool_objectfs\\s3_file_system';"
+    \$CFG->alternative_file_system_class = '$FSCLASS';"
     fi
 
     # Pass BLOCK via the environment, NOT `awk -v`: -v interprets C escapes and
@@ -109,4 +115,20 @@ data:
     moosh -n config-set expirationtime       "${OBJECTFS_PRESIGNED_EXPIRY:-7200}" tool_objectfs
     moosh -n config-set presignedminfilesize "${OBJECTFS_PRESIGNED_MINSIZE:-0}"   tool_objectfs
     moosh -n config-set signingwhitelist     "${OBJECTFS_PRESIGNED_WHITELIST:-*}" tool_objectfs
+    # CDN token-auth signed delivery (optional). Needs the -cdntoken image variant.
+    if [ "${OBJECTFS_CDN_ENABLED:-0}" = "1" ]; then
+      moosh -n config-set enabled       "1"                              local_objectfs_cdntoken
+      moosh -n config-set cdndomain     "${OBJECTFS_CDN_DOMAIN}"         local_objectfs_cdntoken
+      moosh -n config-set cdnscheme     "${OBJECTFS_CDN_SCHEME:-https}"  local_objectfs_cdntoken
+      moosh -n config-set signingmethod "${OBJECTFS_CDN_METHOD:-tokenA}" local_objectfs_cdntoken
+      moosh -n config-set authparam     "${OBJECTFS_CDN_AUTHPARAM:-auth_key}" local_objectfs_cdntoken
+      moosh -n config-set validity      "${OBJECTFS_CDN_VALIDITY:-1800}" local_objectfs_cdntoken
+      moosh -n config-set uid           "${OBJECTFS_CDN_UID:-0}"         local_objectfs_cdntoken
+      moosh -n config-set signingkey    "$CDN_SIGNING_KEY"               local_objectfs_cdntoken
+      # The CDN delivery branch only fires when presigned redirects are on.
+      moosh -n config-set enablepresignedurls "1" tool_objectfs
+      # Switch the active filesystem LAST, after all settings exist, so no moosh
+      # bootstrap runs with our filesystem active but its config still missing.
+      moosh -n config-set filesystem '\local_objectfs_cdntoken\file_system' tool_objectfs
+    fi
     echo "objectfs-configure: applied"

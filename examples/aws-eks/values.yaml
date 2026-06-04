@@ -2,8 +2,10 @@
 # AWS (EKS) example overlay.
 # Uses only the chart's generic values + AWS annotations — no AWS-specific
 # template logic. Fill in every REPLACE_* and create the credential Secret first.
-#   helm upgrade --install moodle charts -n moodle -f examples/values-aws.yaml
+#   helm upgrade --install moodle charts -n moodle -f examples/aws-eks/values.yaml
 # No secrets here — credentials come from auth.existingSecret.
+# PREREQ (see README.md in this folder): EFS CSI driver + an EFS filesystem +
+# the EFS StorageClass (efs-storageclass.yaml).
 # =============================================================================
 
 image:

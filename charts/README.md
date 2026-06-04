@@ -35,7 +35,7 @@ kubectl -n moodle create secret generic moodle-secrets \
 # 2) Install — copy an example from ../examples/ (or values.yaml) and edit hosts/bucket.
 #    Run from the repo root so the paths resolve:
 helm upgrade --install moodle charts -n moodle --create-namespace \
-  --set auth.existingSecret=moodle-secrets -f examples/values-aws.yaml
+  --set auth.existingSecret=moodle-secrets -f examples/aws-eks/values.yaml
 
 # 3) Watch it come up, then smoke-test
 kubectl -n moodle rollout status deploy/moodle-web

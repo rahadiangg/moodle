@@ -30,3 +30,12 @@ CONNECTION-STORM GUARDRAIL
 {{ if not .Values.objectfs.enabled }}
 WARNING: objectfs.enabled=false — Moodle filedir stays on the shared RWX volume (no object-storage offload).
 {{- end }}
+{{- if .Values.objectfs.cdn.enabled }}
+
+CDN token-auth delivery is ENABLED (domain {{ .Values.objectfs.cdn.domain }}).
+  REQUIRED: the image MUST be built with --build-arg INCLUDE_CDN_PLUGIN=true
+  (the "-cdntoken" variant) — current image: {{ include "moodle.image" . }}
+  Otherwise pods fail to boot (class \local_objectfs_cdntoken\file_system missing).
+  Also ensure objectfs.cdn.validity == the CDN-configured token validity window,
+  and the CDN cache key IGNORES the '{{ .Values.objectfs.cdn.authParam }}' parameter.
+{{- end }}
