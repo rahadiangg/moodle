@@ -25,6 +25,17 @@ php:
   pm: static
   maxChildren: 100
 
+# The chart default rolling-update strategy (maxSurge 25%, maxUnavailable 0) gives
+# zero-downtime rolls and is correct with the default `soft` anti-affinity used here.
+# ONLY if you switch to `web.podAntiAffinity: hard` (one pod per node) AND your node
+# count equals the web replica count, a roll deadlocks — the surged pod has no spare
+# node and stays Pending. In that narrow case use kill-then-replace instead:
+# web:
+#   podAntiAffinity: hard
+#   rollingUpdate:
+#     maxUnavailable: 1
+#     maxSurge: 0
+
 # One catch-all Secret holds every credential; the chart creates none.
 #   kubectl create secret generic moodle-secrets \
 #     --from-literal=db-password=... --from-literal=redis-password=... \

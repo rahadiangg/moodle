@@ -12,8 +12,8 @@ spec:
   strategy:
     type: RollingUpdate
     rollingUpdate:
-      maxUnavailable: 0
-      maxSurge: 25%
+      maxUnavailable: {{ .Values.web.rollingUpdate.maxUnavailable }}
+      maxSurge: {{ .Values.web.rollingUpdate.maxSurge }}
   selector:
     matchLabels:
       {{- include "moodle.selectorLabels" . | nindent 6 }}

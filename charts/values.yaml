@@ -54,6 +54,15 @@ web:
   replicaCount: 2           # floor when autoscaling disabled; HPA owns it otherwise
   terminationGracePeriodSeconds: 90   # > slowest in-flight request (quiz submit/upload)
   preStopDrainSeconds: 15   # let the LB deregister the endpoint before SIGTERM
+  # Rolling-update strategy. The default (surge a new pod, never drop below desired)
+  # keeps full capacity during a roll — correct with the default `soft` anti-affinity.
+  # BUT with `podAntiAffinity: hard` (one web pod per node), the surged pod needs a
+  # spare node; on a cluster where nodes == replicaCount it can't be placed and the
+  # roll deadlocks (new pod stuck Pending). In that case use kill-then-replace:
+  #   rollingUpdate: { maxSurge: 0, maxUnavailable: 1 }   # no spare node needed
+  rollingUpdate:
+    maxUnavailable: 0
+    maxSurge: "25%"
   resources:
     requests: { cpu: "500m", memory: "1Gi" }
     limits:   { memory: "2Gi" }       # memory limit only; NO cpu limit (avoid throttling)
