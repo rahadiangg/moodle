@@ -9,6 +9,18 @@
 nameOverride: ""
 fullnameOverride: ""
 
+# -----------------------------------------------------------------------------
+# Moodle web-UI hardening.
+# -----------------------------------------------------------------------------
+moodle:
+  # Plugins are baked into the image (see Dockerfile) and registered by the
+  # db-migrate hook — that is the only supported install path. Moodle's dashboard
+  # installer (ZIP upload / install-from-directory) would write code onto a single
+  # ephemeral pod, so keep it off. Sets $CFG->disableupdateautodeploy (disables ALL
+  # dashboard plugin deployment) + $CFG->disableupdatenotifications (silences the
+  # "updates available" banners, since versions are managed via the image).
+  disablePluginInstaller: true
+
 image:
   # The custom Moodle+ObjectFS image you built and pushed to your registry.
   # Build: docker buildx build --platform linux/amd64 -t <repo>:<tag> --push image/

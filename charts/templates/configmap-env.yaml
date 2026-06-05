@@ -25,6 +25,9 @@ data:
   REVERSEPROXY: {{ .Values.site.reverseProxy | quote }}
   SSLPROXY: {{ .Values.site.sslProxy | quote }}
 
+  # Web-UI hardening: disable the dashboard plugin installer (post-configure.sh reads this)
+  DISABLE_PLUGIN_INSTALLER: {{ ternary "1" "0" .Values.moodle.disablePluginInstaller | quote }}
+
   # Database (web/cron point at the pooler; migrate Job overrides DB_HOST)
   DB_TYPE: "pgsql"
   DB_HOST: {{ .Values.externalDatabase.host | quote }}

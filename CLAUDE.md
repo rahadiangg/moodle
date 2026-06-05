@@ -74,6 +74,17 @@ Works with Method-A CDNs (Huawei, Alibaba, likely Tencent). NOT CloudFront — t
 - It **patches the upstream install script** to quote human-input args (`--fullname`, `--adminpass`, etc.) so a site name with spaces doesn't break first install. Both patches have `grep` guards that fail the build if upstream renames the target — don't remove the guards.
 - A separate `--target test` stage adds composer + Postgres client and force-includes the CDN plugin for PHPUnit. Never push the test stage.
 
+## Adding a Moodle plugin
+
+**Don't use the dashboard's "upload ZIP" page** — it writes code to one ephemeral pod, lost on restart and absent from other replicas. Bake the code into the image instead.
+
+1. Add the code under its plugin-type dir (`mod/`, `local/`, `blocks/`, `admin/tool/`, …) in the `Dockerfile`: `git clone` a third-party plugin (like ObjectFS), or `COPY` your own (like `objectfs_cdntoken`). Pin to a Moodle 4.5-compatible branch.
+2. Bump the image tag and `helm upgrade --set image.tag=<new>`. This re-fires `job-db-migrate`, which runs `upgrade.php` to register the plugin and create its tables, then rolls the pods.
+
+Rolling pods alone isn't enough — only `helm upgrade` runs the DB migration. It's safe for the running site: installs are additive, and if the migrate Job fails the upgrade stops with old pods still serving.
+
+The dashboard installer is disabled by default (`moodle.disablePluginInstaller`, sets `$CFG->disableupdateautodeploy`) precisely because baking is the only supported path — don't re-enable it in production.
+
 ## Conventions
 - **Never commit secrets or real infra** — endpoints, keys, passwords, bucket names, account IDs, kubeconfigs. Use `REPLACE_*` placeholders and `existingSecret`.
 - Every chart value is documented inline in `charts/values.yaml`; update those comments when adding/renaming a value.

@@ -51,6 +51,14 @@ data:
     \$CFG->alternative_file_system_class = '$FSCLASS';"
     fi
 
+    # Lock down the web-UI plugin installer (plugins are baked into the image).
+    # Plain PHP booleans (no quotes, no backslashes) — safe for the awk insertion below.
+    if [ "${DISABLE_PLUGIN_INSTALLER:-0}" = "1" ]; then
+      BLOCK="$BLOCK
+    \$CFG->disableupdateautodeploy = true;
+    \$CFG->disableupdatenotifications = true;"
+    fi
+
     # Pass BLOCK via the environment, NOT `awk -v`: -v interprets C escapes and
     # would mangle the PHP namespace backslashes (\t -> TAB). ENVIRON does not.
     export BLOCK
